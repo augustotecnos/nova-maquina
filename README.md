@@ -4,6 +4,8 @@ Um script para sair do Ubuntu recém-instalado até a máquina de trabalho pront
 pacotes, aplicativos, as ferramentas próprias, as extensões do GNOME e os
 atalhos de teclado. Feito para **Ubuntu 26.04 com GNOME sobre Wayland**.
 
+**Português** · [English](README.en.md)
+
 ```bash
 git clone https://github.com/augustotecnos/nova-maquina.git
 cd nova-maquina
@@ -37,8 +39,8 @@ depende de estar num repositório git.
 Rodar só uma parte, ou pular:
 
 ```bash
-./instalar.sh --so ditado,fotos
-./instalar.sh --sem jogos,snap
+./instalar.sh --so ditado,fotos     # só essas etapas
+./instalar.sh --sem jogos,snap      # todas menos essas
 ```
 
 ## Opções
