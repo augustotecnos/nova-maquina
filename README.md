@@ -5,11 +5,14 @@ pacotes, aplicativos, as ferramentas próprias, as extensões do GNOME e os
 atalhos de teclado. Feito para **Ubuntu 26.04 com GNOME sobre Wayland**.
 
 ```bash
-git clone <este diretório>   # ou copie a pasta inteira por pendrive
+git clone https://github.com/augustotecnos/nova-maquina.git
 cd nova-maquina
 ./instalar.sh --simular      # mostra tudo que faria, sem tocar em nada
 ./instalar.sh                # faz
 ```
+
+Sem rede na máquina nova? Copie a pasta inteira por pendrive: o script não
+depende de estar num repositório git.
 
 É seguro rodar de novo: cada etapa confere antes de agir.
 
