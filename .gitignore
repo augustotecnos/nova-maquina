@@ -1,0 +1,6 @@
+# Saídas do atualizar-listas.sh: são recapturadas da máquina em uso e servem
+# só para comparar com as listas curadas. Não pertencem ao repositório.
+/listas/apt-detectado.txt
+/dconf/preferencias-atual.ini
+__pycache__/
+*.py[cod]

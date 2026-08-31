@@ -1,0 +1,2 @@
+# Deixa o /dev/uinput acessível ao grupo input, para o ydotool digitar.
+KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"

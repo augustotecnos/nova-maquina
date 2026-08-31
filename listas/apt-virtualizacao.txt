@@ -1,0 +1,4 @@
+# Máquinas virtuais.
+qemu-system-x86
+virt-manager
+libvirt-daemon-system

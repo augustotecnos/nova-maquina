@@ -1,0 +1,9 @@
+# Edição de imagem, vídeo e áudio.
+gimp
+inkscape
+krita
+blender
+kdenlive
+audacity
+obs-studio
+ffmpeg

@@ -1,0 +1,5 @@
+# Dependências das ferramentas próprias que o install.sh de cada projeto
+# não cobre: gravação de áudio do ditado e injeção de teclas de reserva.
+pulseaudio-utils
+ydotool
+python3-nautilus

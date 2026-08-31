@@ -1,0 +1,16 @@
+# Aplicativos do dia a dia. Chrome, Edge e VS Code vêm de repositórios
+# de terceiros, adicionados na etapa "repos".
+libreoffice
+thunderbird
+calibre
+pdfarranger
+gthumb
+vlc
+mpv
+haruna
+torbrowser-launcher
+ulauncher
+grub-customizer
+google-chrome-stable
+microsoft-edge-stable
+code

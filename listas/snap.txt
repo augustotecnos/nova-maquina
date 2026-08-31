@@ -1,0 +1,3 @@
+# Snaps instalados à mão (o Firefox e o Thunderbird já vêm com o Ubuntu).
+onlyoffice-desktopeditors
+zotero-snap

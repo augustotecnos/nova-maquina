@@ -1,0 +1,16 @@
+# Aplicativos Flatpak, do Flathub.
+com.brave.Browser
+com.discordapp.Discord
+com.github.dail8859.NotepadNext
+com.github.vkohaupt.vokoscreenNG
+com.spotify.Client
+io.github.diegoivan.pdf_metadata_editor
+io.github.giantpinkrobots.bootqt
+me.fouquet.Stencil
+nl.hjdskes.gcolor3
+org.deskflow.deskflow
+org.flatpak.Builder
+org.gnome.design.Palette
+org.kde.krename
+org.localsend.localsend_app
+org.telegram.desktop

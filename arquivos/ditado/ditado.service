@@ -1,0 +1,15 @@
+[Unit]
+Description=Daemon de ditado por voz (faster-whisper)
+
+[Service]
+Type=simple
+Environment=HF_HOME=%h/.local/share/ditado/models
+Environment=DITADO_MODEL=small
+Environment=DITADO_LANG=pt
+ExecStart=%h/.local/share/ditado/venv/bin/python %h/.local/share/ditado/server.py
+Restart=on-failure
+RestartSec=5
+Nice=5
+
+[Install]
+WantedBy=default.target

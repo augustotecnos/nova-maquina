@@ -1,0 +1,18 @@
+# Linguagens, banco de dados e contêineres.
+python3-pip
+python3-venv
+python3-gi
+python3-pil
+nodejs
+npm
+golang-go
+ruby
+default-jre
+openjdk-17-jdk
+sqlite3
+postgresql
+postgresql-client
+docker-ce
+docker-ce-cli
+containerd.io
+docker-compose-plugin

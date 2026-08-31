@@ -1,0 +1,7 @@
+# Português do Brasil: corretor, dicionários e ajuda traduzida.
+hunspell-pt-br
+wbrazilian
+wportuguese
+gnome-user-docs-pt
+libreoffice-l10n-pt-br
+libreoffice-help-pt-br

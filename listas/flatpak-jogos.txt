@@ -1,0 +1,4 @@
+# Jogos. Pule com --sem-jogos.
+com.valvesoftware.Steam
+net.lutris.Lutris
+com.heroicgameslauncher.hgl

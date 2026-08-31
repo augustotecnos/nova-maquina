@@ -1,0 +1,26 @@
+# Ferramentas de linha de comando e utilitários de sistema.
+curl
+wget
+git
+vim
+nano
+htop
+ncdu
+tmux
+dos2unix
+fastfetch
+build-essential
+make
+cmake
+openssh-server
+openssh-client
+synaptic
+gdebi
+baobab
+gparted
+timeshift
+dconf-editor
+gnome-tweaks
+gnome-shell-extensions
+flatpak
+gnome-software-plugin-flatpak

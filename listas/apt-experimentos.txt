@@ -1,0 +1,12 @@
+# NÃO instalados por padrão. Ficaram para trás e estão aqui só como registro
+# do que já foi testado — use --com-experimentos se quiser reavaliar.
+#
+# onboard, maliit, matchbox: teclados virtuais da era X11; no Wayland sobem
+#   degradados. Substituídos pela extensão GJS OSK.
+# flameshot: no Wayland não registra atalho global próprio.
+# esearch: testado para OCR de tela e descartado; ficou o ocr-tela.
+onboard
+maliit-framework
+maliit-keyboard
+matchbox-keyboard
+flameshot
