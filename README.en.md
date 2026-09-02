@@ -69,7 +69,7 @@ flowchart LR
     end
     subgraph M["④ Environment"]
         direction TB
-        L["extensoes"] --> V["video<br/>sandbox, XWayland, hwdec"] --> N["prefs<br/>theme and shortcuts"] --> O["resumo<br/>what is left"]
+        L["extensoes"] --> V["video<br/>sandbox, XWayland, hwdec"] --> U["nuvem<br/>OneDrive"] --> N["prefs<br/>theme and shortcuts"] --> O["resumo<br/>what is left"]
     end
     F --> P --> T --> M
 ```
@@ -117,8 +117,9 @@ was already in place, `$` is the exact command — in a real run, it runs.
 | 10 | `nautilus` | "Copy path", "Remove background" and "Erase object" in the file manager menu |
 | 11 | `extensoes` | GSConnect, Draw on GNOME and GJS OSK |
 | 12 | `video` | fixes the Chromium sandbox where AppArmor breaks it, forces XWayland only on pre-GCN GPUs, and enables hardware video decoding |
-| 13 | `prefs` | dark theme, shortcuts, and freeing up `Super+H` |
-| 14 | `resumo` | the list of what still depends on you |
+| 13 | `nuvem` | the OneDrive client (abraunegg) syncing `~/OneDrive`, plus the `~/OneDrive-nuvem` shortcut and the Nautilus bookmark for the GNOME mount |
+| 14 | `prefs` | dark theme, shortcuts, and freeing up `Super+H` |
+| 15 | `resumo` | the list of what still depends on you |
 
 ```bash
 ./instalar.sh --so ditado,fotos     # only these stages

@@ -30,7 +30,7 @@ SEM_OPCIONAIS=0
 SO=""
 SEM=""
 
-ETAPAS=(sistema repos apt flatpak snap grupos ferramentas ditado fotos nautilus extensoes video prefs resumo)
+ETAPAS=(sistema repos apt flatpak snap grupos ferramentas ditado fotos nautilus extensoes video nuvem prefs resumo)
 
 declare -A DESCRICAO=(
   [sistema]="checagens do ambiente e atualização dos índices do apt"
@@ -45,6 +45,7 @@ declare -A DESCRICAO=(
   [nautilus]="extensões do gerenciador de arquivos"
   [extensoes]="extensões do GNOME Shell"
   [video]="sandbox do Chromium, XWayland em GPU antiga e decodificação de vídeo"
+  [nuvem]="OneDrive: cliente de sincronização e atalho para a montagem do GNOME"
   [prefs]="preferências da área de trabalho e atalhos"
   [resumo]="o que ainda depende de você"
 )
@@ -548,6 +549,110 @@ FIM"
   fi
 }
 
+etapa_nuvem() {
+  titulo "OneDrive"
+
+  # São dois caminhos que se completam, e vale saber a diferença:
+  #   ~/OneDrive        cópia local de verdade, sincronizada pelo daemon
+  #   ~/OneDrive-nuvem  montagem do GNOME: mostra a nuvem, não baixa nada
+
+  # ------------------------------------------- cliente de sincronização
+  if tem_pacote onedrive; then
+    pula "cliente onedrive já instalado"
+  else
+    passo "instalando o cliente onedrive (abraunegg)"
+    executar sudo apt-get install -y onedrive || aviso "onedrive não instalou"
+  fi
+
+  local cfg="$HOME/.config/onedrive"
+  executar mkdir -p "$cfg"
+  if [ -f "$cfg/config" ]; then
+    pula "configuração do onedrive já existe"
+  else
+    passo "escrevendo a configuração"
+    executar install -Dm644 "$AQUI/arquivos/onedrive/config" "$cfg/config"
+    # O cliente vem com 8 threads fixas e reclama em voz alta quando a máquina
+    # tem menos núcleos que isso. Usa o menor entre os núcleos reais e 8.
+    local nucleos; nucleos=$(nproc 2>/dev/null || echo 4)
+    [ "$nucleos" -gt 8 ] && nucleos=8
+    executar_sh "printf '\nthreads = \"%s\"\n' '$nucleos' >> '$cfg/config'"
+  fi
+  executar install -Dm644 "$AQUI/arquivos/onedrive/sync_list.exemplo" \
+                          "$cfg/sync_list.exemplo"
+
+  # O serviço só pode subir depois de autenticado: sem token ele falha, e o
+  # unit tem Restart=on-failure com RestartSec=3. O pacote já o deixa habilitado
+  # em escopo global (/etc/systemd/user/default.target.wants/), e um
+  # "systemctl --user disable" NÃO desfaz isso — o próprio systemd avisa que a
+  # unidade continuará subindo. Mascarar é o único freio no escopo do usuário.
+  if [ -f "$cfg/refresh_token" ]; then
+    passo "ligando o serviço de sincronização"
+    executar_sh "systemctl --user unmask onedrive.service >/dev/null 2>&1 || true"
+    executar_sh "systemctl --user enable --now onedrive.service >/dev/null 2>&1 || true"
+  else
+    passo "segurando o serviço até a autenticação"
+    executar_sh "systemctl --user mask onedrive.service >/dev/null 2>&1 || true"
+    anotar "OneDrive: rode 'onedrive' para autenticar; depois 'systemctl --user unmask onedrive && systemctl --user enable --now onedrive'"
+  fi
+
+  # ------------------------------------------- atalho para a montagem do GNOME
+  local contas="$HOME/.config/goa-1.0/accounts.conf" ident="" raiz="" drive="" uri=""
+  [ -f "$contas" ] && ident=$(grep -A3 '^Provider=ms_graph' "$contas" \
+                              | sed -n 's/^Identity=//p' | head -1)
+  if [ -z "$ident" ]; then
+    anotar "OneDrive: adicione a conta em Configurações → Contas Online → Microsoft 365 e rode './instalar.sh --so nuvem' de novo para criar o atalho"
+    return 0
+  fi
+  passo "conta do GNOME encontrada: $ident"
+
+  local base="/run/user/$(id -u)/gvfs"
+  ls -d "$base"/onedrive:host=* >/dev/null 2>&1 \
+    || executar_sh "gio mount 'onedrive://$ident/' >/dev/null 2>&1 || true"
+  raiz=$(ls -d "$base"/onedrive:host=* 2>/dev/null | head -1)
+
+  if [ -z "$raiz" ]; then
+    aviso "não consegui montar agora; o marcador do Nautilus monta no primeiro clique"
+  else
+    # A raiz da montagem não lista arquivos: lista os drives da conta, e o
+    # drive pessoal vem com um nome interno (Bundles_<id>). Os arquivos estão
+    # dentro dele — por isso o link aponta um nível abaixo.
+    drive=$(find "$raiz" -mindepth 1 -maxdepth 1 -type d -name 'Bundles_*' \
+                 -printf '%f\n' 2>/dev/null | head -1)
+    passo "atalho ~/OneDrive-nuvem → ${drive:-raiz da conta}"
+    executar ln -sfn "$raiz${drive:+/$drive}" "$HOME/OneDrive-nuvem"
+  fi
+
+  local bm="$HOME/.config/gtk-3.0/bookmarks"
+  uri="onedrive://$ident/$drive"
+  if [ -f "$bm" ] && grep -qF "$uri" "$bm"; then
+    pula "marcador do Nautilus já existe"
+  else
+    passo "marcador OneDrive na barra lateral do Nautilus"
+    executar mkdir -p "$(dirname "$bm")"
+    executar_sh "printf '%s OneDrive\\n' '$uri' >> '$bm'"
+  fi
+
+  # Sem isto o link só funciona depois que alguém abre o OneDrive no Nautilus:
+  # a montagem gvfs não sobrevive ao fim da sessão.
+  local auto="$HOME/.config/autostart/onedrive-montar.desktop"
+  if [ -f "$auto" ]; then
+    pula "montagem automática já configurada"
+  else
+    passo "montar o OneDrive ao entrar na sessão"
+    executar mkdir -p "$(dirname "$auto")"
+    executar_sh "cat > '$auto' <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=Montar o OneDrive
+Comment=Monta a conta Microsoft 365 para o atalho ~/OneDrive-nuvem funcionar
+Exec=gio mount onedrive://$ident/
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=10
+NoDisplay=true
+DESKTOP"
+  fi
+}
+
 etapa_prefs() {
   titulo "Preferências e atalhos"
   local origem="$AQUI/dconf/preferencias.ini"
@@ -581,7 +686,12 @@ etapa_resumo() {
   4. Claude Code: rodar 'claude' e fazer login (as ações de IA dependem disso).
   5. Contas: Chrome, Edge, Brave, Spotify, Telegram, Discord, Steam.
   6. Tailscale: 'sudo tailscale up', se instalado.
-  7. Ditado: o modelo do Whisper (~460 MB) baixa no primeiro uso; fale algo e
+  7. OneDrive: a conta Microsoft entra à mão em Configurações → Contas
+     Online → Microsoft 365 (o OAuth abre o navegador). Para a pasta local,
+     rode 'onedrive' uma vez, autorize, e solte o serviço com
+     'systemctl --user unmask onedrive && systemctl --user enable --now onedrive'
+     (a etapa nuvem o deixa mascarado justamente até esse momento).
+  8. Ditado: o modelo do Whisper (~460 MB) baixa no primeiro uso; fale algo e
      espere alguns segundos a mais nessa primeira vez.
 FIM
   if [ -s "$ARQ_PENDENCIAS" ]; then
@@ -645,7 +755,7 @@ printf '%sMáquina nova%s — nova-maquina %s%s\n' "$FORTE" "$ZERA" "$VERSAO" \
        "$([ "$SIMULAR" = 1 ] && echo "  ${AMARELO}[simulação: nada será alterado]${ZERA}")"
 
 # Só pede senha se alguma etapa escolhida realmente mexer no sistema.
-PRECISA_ROOT=(sistema repos apt snap grupos video)
+PRECISA_ROOT=(sistema repos apt snap grupos video nuvem)
 precisa_sudo=0
 for etapa in "${PRECISA_ROOT[@]}"; do
   quer_etapa "$etapa" && precisa_sudo=1

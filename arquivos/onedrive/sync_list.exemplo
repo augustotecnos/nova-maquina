@@ -1,0 +1,19 @@
+# Sincronização seletiva do OneDrive (abraunegg).
+#
+# Copie para ~/.config/onedrive/sync_list para valer. SEM este arquivo, o
+# cliente baixa a conta inteira — que é o que a maioria quer, e por isso o
+# instalar.sh não o instala sozinho.
+#
+# Regras: um caminho por linha, relativo à raiz do OneDrive. Uma linha que
+# começa com "!" ou "-" exclui. A primeira regra que casa é a que vale, então
+# as exclusões vêm antes das inclusões.
+#
+# ATENÇÃO: mudar este arquivo depois de sincronizado faz o cliente APAGAR
+# localmente o que saiu da lista. Rode `onedrive --dry-run --resync` antes.
+#
+# Exemplo:
+#
+# !Imagens/Rolo da Câmera
+# !Documentos/Arquivo morto
+# Documentos
+# Área de Trabalho

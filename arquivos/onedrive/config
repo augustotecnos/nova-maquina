@@ -1,0 +1,13 @@
+# Cliente OneDrive (abraunegg) — configuração desta máquina.
+# Todas as chaves possíveis: `onedrive --display-config`.
+
+# A cópia local de verdade, com os arquivos no disco. Não confundir com
+# ~/OneDrive-nuvem, que é a montagem do GNOME Online Accounts: aquela só
+# mostra a nuvem, esta baixa.
+sync_dir = "~/OneDrive"
+
+# Lixo de editor que não faz sentido subir.
+skip_file = "~*|.~*|*.tmp|*.swp|*.partial"
+
+# De quanto em quanto tempo o daemon procura mudanças, em segundos.
+monitor_interval = "300"
