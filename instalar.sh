@@ -30,7 +30,7 @@ SEM_OPCIONAIS=0
 SO=""
 SEM=""
 
-ETAPAS=(sistema repos apt flatpak snap grupos ferramentas ditado fotos nautilus extensoes prefs resumo)
+ETAPAS=(sistema repos apt flatpak snap grupos ferramentas ditado fotos nautilus extensoes video prefs resumo)
 
 declare -A DESCRICAO=(
   [sistema]="checagens do ambiente e atualização dos índices do apt"
@@ -44,6 +44,7 @@ declare -A DESCRICAO=(
   [fotos]="remover fundo e apagar objeto por IA, no menu do Nautilus"
   [nautilus]="extensões do gerenciador de arquivos"
   [extensoes]="extensões do GNOME Shell"
+  [video]="sandbox do Chromium, XWayland em GPU antiga e decodificação de vídeo"
   [prefs]="preferências da área de trabalho e atalhos"
   [resumo]="o que ainda depende de você"
 )
@@ -434,6 +435,119 @@ except Exception: print("")' 2>/dev/null)"
   anotar "Extensões do GNOME só carregam depois de sair e entrar na sessão (no Wayland não há Alt+F2 → r)"
 }
 
+etapa_video() {
+  titulo "Vídeo e aceleração"
+
+  # ---------------------------------------------------- sandbox do Chromium
+  # O Ubuntu 24+ liga kernel.apparmor_restrict_unprivileged_userns=1. O
+  # postinst de vários pacotes Electron testa apenas "unshare --user true",
+  # que passa, conclui que namespaces bastam e deixa o chrome-sandbox sem
+  # SUID. Mas a sandbox precisa mapear root dentro do namespace, e isso é
+  # negado — o processo de GPU não sobe e o app morre na partida com
+  # "GPU process isn't usable. Goodbye.".
+  #
+  # Não tem relação com a placa de vídeo: acontece igual em máquina nova.
+  # O pacote do Chrome não sofre porque já instala o helper com SUID.
+  if unshare --user --map-root-user true 2>/dev/null; then
+    pula "user namespaces completos; sandbox por setuid desnecessária"
+  else
+    local s achou=0
+    for s in /opt/*/chrome-sandbox; do
+      [ -e "$s" ] || continue
+      achou=1
+      if [ -u "$s" ]; then
+        pula "$(basename "$(dirname "$s")"): chrome-sandbox já tem SUID"
+      else
+        if [ "$SIMULAR" = 1 ] || sudo -n true 2>/dev/null; then
+          passo "SUID no chrome-sandbox de $(basename "$(dirname "$s")")"
+          executar sudo chmod 4755 "$s"
+        else
+          # Não abortar por causa disto: numa execução completa o sudo já foi
+          # pedido lá no começo; em "--so video" isolado, vira recado.
+          aviso "sem sudo agora; rode: sudo chmod 4755 $s"
+          anotar "sudo chmod 4755 $s"
+        fi
+      fi
+    done
+    if [ "$achou" = 0 ]; then
+      pula "nenhum chrome-sandbox em /opt"
+    else
+      anotar "chrome-sandbox: atualizar o pacote desfaz o SUID. Se um app Electron parar de abrir, rode ./instalar.sh --so video"
+    fi
+  fi
+
+  # ------------------------------------------- XWayland em GPU pré-GCN
+  # Em placas TeraScale (driver de kernel "radeon", anterior ao GCN) o
+  # Electron em Wayland nativo fica lento; no XWayland responde bem. Em
+  # placa moderna vale o contrário, então isto é condicionado ao driver:
+  # máquina nova usa amdgpu, i915, xe, nvidia ou nouveau e não entra aqui.
+  local pci_k; pci_k="$(lspci -k 2>/dev/null || true)"
+  if [[ "$pci_k" == *"Kernel driver in use: radeon"$'\n'* ]]; then
+    local origem destino achou=0
+    for origem in /usr/share/applications/ai.opencode.desktop.desktop \
+                  /usr/share/applications/opencode-desktop.desktop; do
+      [ -f "$origem" ] || continue
+      achou=1
+      destino="$HOME/.local/share/applications/$(basename "$origem")"
+      if grep -q -- "--ozone-platform=x11" "$destino" 2>/dev/null; then
+        pula "$(basename "$destino") já força XWayland"
+      else
+        passo "XWayland em $(basename "$origem")"
+        executar mkdir -p "$(dirname "$destino")"
+        # insere a flag logo após o binário, preservando o resto da linha
+        executar_sh "sed -E 's|^Exec=([^ ]+)|Exec=\\1 --ozone-platform=x11|' '$origem' > '$destino'"
+      fi
+    done
+    if [ "$achou" = 0 ]; then
+      pula "OpenCode não instalado"
+    else
+      executar_sh "update-desktop-database '$HOME/.local/share/applications' 2>/dev/null || true"
+      anotar "o menu do GNOME só lê o .desktop novo depois de sair e entrar na sessão"
+    fi
+  else
+    pula "GPU moderna; Wayland nativo é o caminho melhor"
+  fi
+
+  # ------------------------------------ decodificação de vídeo por hardware
+  # auto-safe deixa o mpv escolher a API (vaapi, nvdec, vulkan...) conforme
+  # a máquina. Não fixar uma API aqui: o que serve numa placa quebra noutra.
+  local mpvconf="$HOME/.config/mpv/mpv.conf"
+  if grep -qE '^[[:space:]]*hwdec[[:space:]]*=' "$mpvconf" 2>/dev/null; then
+    pula "mpv já define hwdec"
+  else
+    passo "mpv: hwdec=auto-safe"
+    executar mkdir -p "$(dirname "$mpvconf")"
+    executar_sh "printf '%s\\n' '# Decodificacao por hardware; auto-safe escolhe a API conforme a maquina.' 'hwdec=auto-safe' >> '$mpvconf'"
+  fi
+
+  # O Haruna usa libmpv mas NÃO lê o mpv.conf — precisa da própria chave, e
+  # ela só vale no grupo [Playback].
+  local haruna="$HOME/.config/haruna/haruna.conf"
+  if [ ! -f "$haruna" ]; then
+    pula "Haruna ainda não rodou (cria a config no primeiro uso)"
+  elif pgrep -x haruna >/dev/null 2>&1; then
+    aviso "Haruna aberto: feche e rode ./instalar.sh --so video (ele reescreve a config ao sair)"
+  elif [ "$(python3 -c "
+import configparser, sys
+c = configparser.ConfigParser(); c.optionxform = str
+try: c.read(sys.argv[1], encoding='utf-8')
+except Exception: print('nao'); raise SystemExit
+print('sim' if c.has_option('Playback','HWDecoding') and c.get('Playback','HWDecoding').lower()=='true' else 'nao')
+" "$haruna" 2>/dev/null)" = sim ]; then
+    pula "Haruna já usa decodificação por hardware"
+  else
+    passo "Haruna: HWDecoding=true"
+    executar_sh "python3 - '$haruna' <<'FIM'
+import configparser, sys
+c = configparser.ConfigParser(); c.optionxform = str
+c.read(sys.argv[1], encoding='utf-8')
+if not c.has_section('Playback'): c.add_section('Playback')
+c.set('Playback', 'HWDecoding', 'true')
+with open(sys.argv[1], 'w', encoding='utf-8') as f: c.write(f, space_around_delimiters=False)
+FIM"
+  fi
+}
+
 etapa_prefs() {
   titulo "Preferências e atalhos"
   local origem="$AQUI/dconf/preferencias.ini"
@@ -531,7 +645,7 @@ printf '%sMáquina nova%s — nova-maquina %s%s\n' "$FORTE" "$ZERA" "$VERSAO" \
        "$([ "$SIMULAR" = 1 ] && echo "  ${AMARELO}[simulação: nada será alterado]${ZERA}")"
 
 # Só pede senha se alguma etapa escolhida realmente mexer no sistema.
-PRECISA_ROOT=(sistema repos apt snap grupos)
+PRECISA_ROOT=(sistema repos apt snap grupos video)
 precisa_sudo=0
 for etapa in "${PRECISA_ROOT[@]}"; do
   quer_etapa "$etapa" && precisa_sudo=1

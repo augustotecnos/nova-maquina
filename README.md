@@ -63,7 +63,7 @@ flowchart LR
     end
     subgraph M["④ Ambiente"]
         direction TB
-        L["extensoes"] --> N["prefs<br/>tema e atalhos"] --> O["resumo<br/>o que falta"]
+        L["extensoes"] --> V["video<br/>sandbox, XWayland, hwdec"] --> N["prefs<br/>tema e atalhos"] --> O["resumo<br/>o que falta"]
     end
     F --> P --> T --> M
 ```
@@ -110,8 +110,9 @@ estava pronto, `$` é o comando exato — em execução de verdade, ele roda.
 | 9 | `fotos` | remover fundo com `rembg`; apagar objeto com IOPaint (opcional) |
 | 10 | `nautilus` | "Copiar caminho", "Remover fundo" e "Apagar objeto" no menu do gerenciador de arquivos |
 | 11 | `extensoes` | GSConnect, Draw on GNOME e GJS OSK |
-| 12 | `prefs` | tema escuro, atalhos e a liberação do `Super+H` |
-| 13 | `resumo` | a lista do que ainda depende de você |
+| 12 | `video` | conserta a sandbox do Chromium onde o AppArmor a quebra, força XWayland só em GPU pré-GCN e liga a decodificação de vídeo por hardware |
+| 13 | `prefs` | tema escuro, atalhos e a liberação do `Super+H` |
+| 14 | `resumo` | a lista do que ainda depende de você |
 
 ```bash
 ./instalar.sh --so ditado,fotos     # só essas etapas
