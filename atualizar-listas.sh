@@ -31,6 +31,9 @@ cp -f ~/.config/systemd/user/ditado.service                arquivos/ditado/
   | grep -iE "^(faster-whisper|ctranslate2|av|onnxruntime|tokenizers)=" > arquivos/ditado/requirements.txt
 cp -f ~/.local/share/nautilus-python/extensions/{copiar-caminho,remover-fundo,apagar-objeto}.py arquivos/nautilus/ 2>/dev/null || true
 cp -f ~/.local/opt/fotos-ia/{worker-remover-fundo.py,abrir-iopaint.sh} arquivos/fotos-ia/ 2>/dev/null || true
+# o .desktop do JDownloader é modelo (@BIN@) e não volta daqui
+cp -f ~/.local/bin/{jdownloader,jdownloader-vigia}         arquivos/jdownloader/ 2>/dev/null || true
+cp -f ~/.config/systemd/user/jdownloader-vigia.service     arquivos/jdownloader/ 2>/dev/null || true
 
 say "Pacotes do apt instalados à mão (para conferência)"
 comm -23 <(apt-mark showmanual | LC_ALL=C sort -u) \

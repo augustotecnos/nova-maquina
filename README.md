@@ -63,7 +63,7 @@ flowchart LR
     end
     subgraph M["④ Ambiente"]
         direction TB
-        L["extensoes"] --> V["video<br/>sandbox, XWayland, hwdec"] --> U["nuvem<br/>OneDrive"] --> N["prefs<br/>tema e atalhos"] --> O["resumo<br/>o que falta"]
+        L["extensoes"] --> V["video<br/>sandbox, XWayland, hwdec"] --> U["nuvem<br/>OneDrive"] --> W["jdownloader<br/>escala por monitor"] --> N["prefs<br/>tema e atalhos"] --> O["resumo<br/>o que falta"]
     end
     F --> P --> T --> M
 ```
@@ -112,8 +112,9 @@ estava pronto, `$` é o comando exato — em execução de verdade, ele roda.
 | 11 | `extensoes` | GSConnect, Draw on GNOME e GJS OSK |
 | 12 | `video` | conserta a sandbox do Chromium onde o AppArmor a quebra, força XWayland só em GPU pré-GCN e liga a decodificação de vídeo por hardware |
 | 13 | `nuvem` | cliente OneDrive (abraunegg) sincronizando `~/OneDrive`, mais o atalho `~/OneDrive-nuvem` e o marcador do Nautilus para a montagem do GNOME |
-| 14 | `prefs` | tema escuro, atalhos e a liberação do `Super+H` |
-| 15 | `resumo` | a lista do que ainda depende de você |
+| 14 | `jdownloader` | o JDownloader 2 oficial no Java do sistema, aberto por um wrapper que acerta a escala de cada monitor (o Java ignora o `Xft.dpi` e ficaria minúsculo na TV a 125%), mais um vigia que oferece reabrir quando a troca de monitor muda a escala com ele aberto |
+| 15 | `prefs` | tema escuro, atalhos e a liberação do `Super+H` |
+| 16 | `resumo` | a lista do que ainda depende de você |
 
 ```bash
 ./instalar.sh --so ditado,fotos     # só essas etapas
@@ -219,6 +220,8 @@ Instale com `--com-experimentos` se quiser reavaliar.
    Colar Avançado — é o que guarda a permissão do portal.
 4. **Fazer login** no `claude`, no Tailscale e nas contas dos aplicativos.
 5. O **modelo do Whisper** (~460 MB) baixa no primeiro ditado.
+6. **Contas e lista do JDownloader**: ficam na pasta `cfg` dele, que não entra
+   num repositório público. Copie-a de um backup, com o programa fechado.
 
 O `resumo` imprime essa lista no fim, junto com o que a execução anotou pelo
 caminho.
@@ -232,7 +235,8 @@ Quando esta máquina mudar, recapture o que dá para recapturar sozinho:
 ```
 
 Ele substitui direto as listas de Flatpak e Snap e os arquivos que só existem
-aqui (o daemon do ditado, as extensões do Nautilus, os scripts de foto), e gera
+aqui (o daemon do ditado, as extensões do Nautilus, os scripts de foto, o
+wrapper e o vigia do JDownloader), e gera
 `listas/apt-detectado.txt` e `dconf/preferencias-atual.ini` para você comparar.
 Essas duas exigem curadoria: a lista crua do apt vem com mais de cem pacotes de
 base, e o dump do dconf vem com coisas específicas da máquina.
@@ -240,7 +244,7 @@ base, e o dump do dconf vem com coisas específicas da máquina.
 ## Estrutura
 
 ```
-instalar.sh                    o script — 550 linhas, treze etapas
+instalar.sh                    o script — 860 linhas, dezesseis etapas
 atualizar-listas.sh            recaptura desta máquina
 listas/                        pacotes, por grupo, com comentários
 dconf/preferencias.ini         preferências e atalhos (@HOME@ é trocado na hora)
@@ -248,7 +252,9 @@ arquivos/ditado/               daemon, comando, serviço e dependências fixadas
 arquivos/nautilus/             extensões em Python do gerenciador de arquivos
 arquivos/fotos-ia/             worker do rembg e o lançador do IOPaint
 arquivos/udev/                 regra que libera o /dev/uinput ao grupo input
+arquivos/jdownloader/          wrapper de escala, vigia da troca de monitor, serviço e atalho
 arquivos/habilitar-extensao.py acrescenta um UUID à lista de extensões ativas
+testes/                        python3 -m unittest discover -s testes
 ```
 
 Cada execução fica registrada em `~/.cache/nova-maquina.log`.

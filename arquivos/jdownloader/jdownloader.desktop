@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=JDownloader 2
+GenericName=Gerenciador de Downloads
+Comment=Gerenciador de downloads JDownloader 2
+Icon=jdownloader
+Exec=@BIN@/jdownloader
+Terminal=false
+Categories=Network;FileTransfer;
+Keywords=download;jdownloader;gerenciador;
+StartupNotify=true
+StartupWMClass=org-jdownloader-update-launcher-JDLauncher
+SingleMainWindow=true

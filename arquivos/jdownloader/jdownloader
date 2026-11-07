@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Abre o JDownloader 2 na escala certa do monitor em uso.
+#
+#   jdownloader            abre o programa
+#   jdownloader --escala   só imprime a escala que o monitor atual pede
+#
+# Por quê: com escala fracionária (ex.: TV a 125%) e o recurso
+# xwayland-native-scaling do mutter, o Xwayland recebe uma tela "2x"
+# (3072x1728 para uma TV 1920x1080) e o app precisa se ampliar sozinho.
+# O mutter avisa isso por Xft.dpi (96 × escala), que GTK e Qt respeitam,
+# mas o Java/Swing ignora — desenha em 1x e tudo fica minúsculo.
+# J2D_UISCALE é lida só pelo Java, então não vaza para programas que o
+# JDownloader abrir, e sobrevive aos reinícios que ele faz após atualizar.
+#
+# O Java fixa a escala na partida. Trocar de monitor com ele aberto não
+# ajusta — quem cuida disso é o jdownloader-vigia, que oferece reabrir.
+
+escala_do_monitor() {
+    local dpi texto
+    dpi=$(xrdb -query 2>/dev/null | awk '/^Xft\.dpi:/ {print $2; exit}')
+    # Xft.dpi = 96 × escala da janela × escala do texto; tira a do texto.
+    texto=$(gsettings get org.gnome.desktop.interface text-scaling-factor 2>/dev/null)
+    awk -v d="${dpi:-96}" -v t="${texto:-1}" \
+        'BEGIN { if (t <= 0) t = 1; s = int(d / (96 * t) + 0.5); print (s < 1 ? 1 : s) }'
+}
+
+if [ "${1:-}" = "--escala" ]; then
+    escala_do_monitor
+    exit 0
+fi
+
+pasta_documentos=$(xdg-user-dir DOCUMENTS 2>/dev/null)
+[ -n "$pasta_documentos" ] && [ "$pasta_documentos" != "$HOME" ] \
+    || pasta_documentos="$HOME/Documentos"
+JD_DIR="${JD_DIR:-$pasta_documentos/JDownloader 2.0}"
+
+[ -n "${J2D_UISCALE:-}" ] || export J2D_UISCALE="$(escala_do_monitor)"
+
+cd "$JD_DIR" || { echo "JDownloader não encontrado em $JD_DIR" >&2; exit 1; }
+exec /usr/bin/java -jar "$JD_DIR/JDownloader.jar" "$@"

@@ -1,0 +1,15 @@
+[Unit]
+Description=Vigia do JDownloader: oferece reabrir quando a troca de monitor muda a escala
+# Precisa da sessão gráfica: o GNOME importa DISPLAY e o barramento para o
+# systemd do usuário só quando ela sobe.
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/jdownloader-vigia
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

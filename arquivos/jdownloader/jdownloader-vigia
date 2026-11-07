@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+"""Vigia do JDownloader: avisa quando uma troca de monitor o deixa na escala errada.
+
+O Java fixa a escala da interface na partida (ver o wrapper `jdownloader`).
+Quando o GNOME troca de monitor — da TV a 125% para o LG a 100%, por
+exemplo — a janela fica gigante ou minúscula até o programa ser reaberto.
+
+Este vigia escuta a troca, compara a escala com que o JDownloader partiu com
+a que o monitor pede agora e, se diferirem, mostra uma notificação com o
+botão "Reabrir". Ignorar não faz nada. O clique confere de novo, fecha o
+programa normalmente (SIGTERM, ele salva a lista) e o abre pelo wrapper.
+
+Fala com o servidor de notificações direto pelo D-Bus: o perfil do AppArmor
+que o Ubuntu põe no notify-send bloqueia o GetCapabilities, e sem essa
+resposta o notify-send conclui que não há botões.
+"""
+
+import json
+import os
+import signal
+import subprocess
+import time
+from pathlib import Path
+
+import gi
+
+gi.require_version("Gio", "2.0")
+gi.require_version("GLib", "2.0")
+from gi.repository import Gio, GLib  # noqa: E402
+
+WRAPPER = os.environ.get("JD_WRAPPER", str(Path.home() / ".local/bin/jdownloader"))
+ESTADO_JANELA = "cfg/org.jdownloader.settings.GraphicalUserInterfaceSettings.lastframestatus.json"
+# Silêncio exigido depois do último sinal antes de conferir. A troca de
+# monitor chega em levas: medido 3,01 s entre a primeira e a segunda, e com
+# 3 s o vigia conferia no meio dela, com o Xft.dpi ainda antigo (alarme falso).
+ESPERA_MS = 5000
+PRAZO_FECHAR_S = 90     # quanto esperar o JDownloader salvar a lista e sair
+
+NOTIF = ("org.freedesktop.Notifications", "/org/freedesktop/Notifications",
+         "org.freedesktop.Notifications")
+
+
+# ------------------------------------------------------------ partes puras
+
+def pids_do_jd():
+    """PIDs deste usuário cujo binário é `java` e que rodam um JDownloader.jar."""
+    achados = []
+    uid = os.getuid()
+    for p in Path("/proc").iterdir():
+        if not p.name.isdigit():
+            continue
+        try:
+            if p.stat().st_uid != uid:
+                continue
+            if (p / "comm").read_text().strip() != "java":
+                continue
+            args = (p / "cmdline").read_bytes().split(b"\0")
+        except OSError:
+            continue
+        if any(a.endswith(b"JDownloader.jar") for a in args):
+            achados.append(int(p.name))
+    return sorted(achados)
+
+
+def escala_do_processo(pid):
+    """Escala com que o processo partiu; sem J2D_UISCALE o Java usa 1 aqui."""
+    try:
+        ambiente = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+    except OSError:
+        return None
+    for item in ambiente:
+        if item.startswith(b"J2D_UISCALE="):
+            try:
+                return max(1, int(float(item.split(b"=", 1)[1])))
+            except ValueError:
+                return 1
+    return 1
+
+
+def escala_esperada():
+    """O que o monitor atual pede, pela mesma conta do wrapper."""
+    r = subprocess.run([WRAPPER, "--escala"], capture_output=True, text=True, timeout=10)
+    try:
+        return int(r.stdout.strip())
+    except ValueError:
+        return 1
+
+
+def precisa_reabrir(atual, esperada):
+    return atual != esperada
+
+
+# Pares (chave, rótulo). "default" é o clique no corpo do aviso: sem ela, o
+# GNOME trata esse clique como "abrir o app" e descarta o aviso sem emitir
+# ActionInvoked — o vigia nunca ficaria sabendo.
+ACOES_DO_AVISO = ["reabrir", "Reabrir", "default", "Reabrir"]
+
+
+def acao_reabre(chave):
+    return chave in ("reabrir", "default")
+
+
+def marcar_maximizado(arquivo):
+    """O JDownloader salva o tamanho da janela na escala antiga; reabrir
+    com esse tamanho deixa a janela pequena e fora do lugar."""
+    arquivo = Path(arquivo)
+    try:
+        dados = json.loads(arquivo.read_text())
+    except (OSError, ValueError):
+        return
+    dados["extendedState"] = "MAXIMIZED_BOTH"
+    arquivo.write_text(json.dumps(dados, separators=(",", ":")))
+
+
+# ------------------------------------------------------------------ vigia
+
+class Vigia:
+    def __init__(self):
+        self.bus = Gio.bus_get_sync(Gio.BusType.SESSION)
+        self.aviso_id = 0
+        self.espera = 0
+        nada = Gio.DBusSignalFlags.NONE
+        self.bus.signal_subscribe(
+            "org.gnome.Mutter.DisplayConfig", "org.gnome.Mutter.DisplayConfig",
+            "MonitorsChanged", "/org/gnome/Mutter/DisplayConfig", None, nada,
+            self._monitores_mudaram)
+        self.bus.signal_subscribe(None, NOTIF[2], "ActionInvoked", NOTIF[1], None, nada,
+                                  self._acao)
+        self.bus.signal_subscribe(None, NOTIF[2], "NotificationClosed", NOTIF[1], None, nada,
+                                  self._fechada)
+
+    # Uma troca de monitor costuma vir em rajada de sinais; confere uma vez só,
+    # depois que a rajada passa e o Xft.dpi assenta.
+    def _monitores_mudaram(self, *_):
+        if self.espera:
+            GLib.source_remove(self.espera)
+        self.espera = GLib.timeout_add(ESPERA_MS, self._conferir)
+
+    def _conferir(self):
+        self.espera = 0
+        pids = pids_do_jd()
+        if not pids:
+            self._fechar_aviso()
+            return False
+        atual, esperada = escala_do_processo(pids[0]), escala_esperada()
+        if atual is not None and precisa_reabrir(atual, esperada):
+            if not self.aviso_id:
+                self._avisar(atual, esperada)
+        else:
+            self._fechar_aviso()
+        return False
+
+    def _avisar(self, atual, esperada):
+        corpo = (f"Ele abriu em escala {atual}× e este monitor pede {esperada}×. "
+                 "Reabrir fecha o programa normalmente e abre de novo; "
+                 "o que estiver baixando para por alguns segundos.")
+        dicas = {"desktop-entry": GLib.Variant("s", "jdownloader"),
+                 "urgency": GLib.Variant("y", 1)}
+        r = self.bus.call_sync(
+            *NOTIF, "Notify",
+            GLib.Variant("(susssasa{sv}i)", (
+                "JDownloader", 0, "jdownloader",
+                "JDownloader na escala do outro monitor", corpo,
+                ACOES_DO_AVISO, dicas, 0)),
+            GLib.VariantType("(u)"), Gio.DBusCallFlags.NONE, -1, None)
+        self.aviso_id = r.unpack()[0]
+
+    def _fechar_aviso(self):
+        if not self.aviso_id:
+            return
+        try:
+            self.bus.call_sync(*NOTIF, "CloseNotification",
+                               GLib.Variant("(u)", (self.aviso_id,)),
+                               None, Gio.DBusCallFlags.NONE, -1, None)
+        except GLib.Error:
+            pass
+        self.aviso_id = 0
+
+    def _acao(self, _con, _remetente, _caminho, _iface, _sinal, params):
+        nid, chave = params.unpack()
+        if nid == self.aviso_id and acao_reabre(chave):
+            self.aviso_id = 0
+            self._reabrir()
+
+    def _fechada(self, _con, _remetente, _caminho, _iface, _sinal, params):
+        nid, _motivo = params.unpack()
+        if nid == self.aviso_id:
+            self.aviso_id = 0
+
+    def _reabrir(self):
+        pids = pids_do_jd()
+        if not pids:
+            return
+        pid = pids[0]
+        # Pode ter voltado ao monitor de antes entre o aviso e o clique.
+        if not precisa_reabrir(escala_do_processo(pid), escala_esperada()):
+            return
+        try:
+            pasta = Path(os.readlink(f"/proc/{pid}/cwd"))
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            return
+        prazo = time.monotonic() + PRAZO_FECHAR_S
+        while Path(f"/proc/{pid}").exists() and time.monotonic() < prazo:
+            time.sleep(0.5)
+        if Path(f"/proc/{pid}").exists():
+            print(f"JDownloader (pid {pid}) não fechou em {PRAZO_FECHAR_S}s; desisti de reabrir",
+                  flush=True)
+            return
+        marcar_maximizado(pasta / ESTADO_JANELA)
+        # Escopo próprio do systemd, como o GNOME faz ao abrir um app: assim o
+        # JDownloader não fica pendurado no serviço do vigia (parar o vigia
+        # não o mata) e setsid -f o solta deste processo (sem zumbi).
+        subprocess.run(["setsid", "-f", "systemd-run", "--user", "--scope", "--quiet",
+                        f"--unit=app-jdownloader-{int(time.time())}",
+                        "--description=JDownloader 2", "--", WRAPPER],
+                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL)
+        print(f"JDownloader reaberto na escala {escala_esperada()}", flush=True)
+
+
+def main():
+    Vigia()
+    print("vigiando trocas de monitor", flush=True)
+    GLib.MainLoop().run()
+
+
+if __name__ == "__main__":
+    main()

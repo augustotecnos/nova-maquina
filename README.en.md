@@ -69,7 +69,7 @@ flowchart LR
     end
     subgraph M["④ Environment"]
         direction TB
-        L["extensoes"] --> V["video<br/>sandbox, XWayland, hwdec"] --> U["nuvem<br/>OneDrive"] --> N["prefs<br/>theme and shortcuts"] --> O["resumo<br/>what is left"]
+        L["extensoes"] --> V["video<br/>sandbox, XWayland, hwdec"] --> U["nuvem<br/>OneDrive"] --> W["jdownloader<br/>per-monitor scale"] --> N["prefs<br/>theme and shortcuts"] --> O["resumo<br/>what is left"]
     end
     F --> P --> T --> M
 ```
@@ -118,8 +118,9 @@ was already in place, `$` is the exact command — in a real run, it runs.
 | 11 | `extensoes` | GSConnect, Draw on GNOME and GJS OSK |
 | 12 | `video` | fixes the Chromium sandbox where AppArmor breaks it, forces XWayland only on pre-GCN GPUs, and enables hardware video decoding |
 | 13 | `nuvem` | the OneDrive client (abraunegg) syncing `~/OneDrive`, plus the `~/OneDrive-nuvem` shortcut and the Nautilus bookmark for the GNOME mount |
-| 14 | `prefs` | dark theme, shortcuts, and freeing up `Super+H` |
-| 15 | `resumo` | the list of what still depends on you |
+| 14 | `jdownloader` | the official JDownloader 2 on the system Java, launched by a wrapper that sets the right scale for each monitor (Java ignores `Xft.dpi` and would be tiny on the TV at 125%), plus a watcher that offers to reopen it when a monitor switch changes the scale while it is open |
+| 15 | `prefs` | dark theme, shortcuts, and freeing up `Super+H` |
+| 16 | `resumo` | the list of what still depends on you |
 
 ```bash
 ./instalar.sh --so ditado,fotos     # only these stages
@@ -225,6 +226,9 @@ Install them with `--com-experimentos` if you want to reassess.
    Avançado — that is what stores the portal permission.
 4. **Signing in** to `claude`, to Tailscale and to the application accounts.
 5. The **Whisper model** (~460 MB) downloads on the first dictation.
+6. **JDownloader accounts and download list** live in its `cfg` folder, which
+   does not belong in a public repository. Copy it from a backup, with the
+   program closed.
 
 The `resumo` stage prints this list at the end, together with whatever the run
 noted along the way.
@@ -238,7 +242,8 @@ When this machine changes, recapture whatever can be recaptured on its own:
 ```
 
 It replaces the Flatpak and Snap lists and the files that only exist here (the
-dictation daemon, the Nautilus extensions, the photo scripts) outright, and
+dictation daemon, the Nautilus extensions, the photo scripts, the JDownloader
+wrapper and watcher) outright, and
 writes `listas/apt-detectado.txt` and `dconf/preferencias-atual.ini` for you to
 compare. Those two need curation: the raw apt list carries over a hundred base
 packages, and the dconf dump carries machine-specific entries.
@@ -246,7 +251,7 @@ packages, and the dconf dump carries machine-specific entries.
 ## Layout
 
 ```
-instalar.sh                    the script — 550 lines, thirteen stages
+instalar.sh                    the script — 860 lines, sixteen stages
 atualizar-listas.sh            recaptures from this machine
 listas/                        packages, by group, with comments
 dconf/preferencias.ini         preferences and shortcuts (@HOME@ is substituted at apply time)
@@ -254,7 +259,9 @@ arquivos/ditado/               daemon, command, service and pinned dependencies
 arquivos/nautilus/             Python extensions for the file manager
 arquivos/fotos-ia/             the rembg worker and the IOPaint launcher
 arquivos/udev/                 rule that opens /dev/uinput to the input group
+arquivos/jdownloader/          scale wrapper, monitor-switch watcher, service and launcher
 arquivos/habilitar-extensao.py appends a UUID to the enabled-extensions key
+testes/                        python3 -m unittest discover -s testes
 ```
 
 Every run is logged to `~/.cache/nova-maquina.log`.

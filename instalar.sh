@@ -30,7 +30,7 @@ SEM_OPCIONAIS=0
 SO=""
 SEM=""
 
-ETAPAS=(sistema repos apt flatpak snap grupos ferramentas ditado fotos nautilus extensoes video nuvem prefs resumo)
+ETAPAS=(sistema repos apt flatpak snap grupos ferramentas ditado fotos nautilus extensoes video nuvem jdownloader prefs resumo)
 
 declare -A DESCRICAO=(
   [sistema]="checagens do ambiente e atualização dos índices do apt"
@@ -46,6 +46,7 @@ declare -A DESCRICAO=(
   [extensoes]="extensões do GNOME Shell"
   [video]="sandbox do Chromium, XWayland em GPU antiga e decodificação de vídeo"
   [nuvem]="OneDrive: cliente de sincronização e atalho para a montagem do GNOME"
+  [jdownloader]="JDownloader 2 na escala certa de cada monitor, com aviso ao trocar de monitor"
   [prefs]="preferências da área de trabalho e atalhos"
   [resumo]="o que ainda depende de você"
 )
@@ -651,6 +652,91 @@ X-GNOME-Autostart-Delay=10
 NoDisplay=true
 DESKTOP"
   fi
+}
+
+etapa_jdownloader() {
+  titulo "JDownloader 2"
+
+  # O programa oficial (JDownloader.jar) no Java do sistema, aberto por um
+  # wrapper que acerta a escala da interface. Com escala fracionária (a TV a
+  # 125%) e o xwayland-native-scaling do mutter, o Java ignora o Xft.dpi e
+  # desenharia tudo minúsculo. O Java fixa a escala na partida, então um
+  # vigia oferece reabrir quando a troca de monitor muda a escala com ele
+  # aberto. Os detalhes estão nos comentários de arquivos/jdownloader/.
+  local src="$AQUI/arquivos/jdownloader" docs pasta
+  docs="$(xdg-user-dir DOCUMENTS 2>/dev/null)"
+  { [ -n "$docs" ] && [ "$docs" != "$HOME" ]; } || docs="$HOME/Documentos"
+  pasta="$docs/JDownloader 2.0"
+
+  # ------------------------------------------------------------------ Java
+  if tem_comando java; then
+    pula "Java já instalado"
+  elif [ "$SIMULAR" = 1 ] || sudo -n true 2>/dev/null; then
+    passo "Java (default-jre)"
+    executar sudo apt-get install -y default-jre \
+      || aviso "o Java não instalou; o JDownloader não abre sem ele"
+  else
+    aviso "sem Java e sem sudo agora; rode: sudo apt-get install default-jre"
+    anotar "sudo apt-get install default-jre (o JDownloader precisa)"
+  fi
+
+  # -------------------------------------------------------------- programa
+  if [ -f "$pasta/JDownloader.jar" ]; then
+    pula "JDownloader já está em $pasta"
+  else
+    passo "baixando o JDownloader.jar oficial para $pasta"
+    executar mkdir -p "$pasta"
+    executar curl -fL --retry 3 -o "$pasta/JDownloader.jar" \
+      https://installer.jdownloader.org/JDownloader.jar \
+      || { aviso "não consegui baixar o JDownloader"; return 0; }
+  fi
+
+  # ---------------------------------------- wrapper, vigia e o seu serviço
+  # A ordem importa: o GLib descarta em silêncio um .desktop cujo Exec aponta
+  # para arquivo sem permissão de execução, e o menu só relê a pasta de
+  # atalhos quando ela muda. Wrapper executável primeiro, .desktop por último.
+  passo "wrapper de escala, vigia da troca de monitor e o serviço dele"
+  executar install -Dm755 "$src/jdownloader"       "$HOME/.local/bin/jdownloader"
+  executar install -Dm755 "$src/jdownloader-vigia" "$HOME/.local/bin/jdownloader-vigia"
+  executar install -Dm644 "$src/jdownloader-vigia.service" \
+                          "$HOME/.config/systemd/user/jdownloader-vigia.service"
+  executar_sh "systemctl --user daemon-reload"
+  executar_sh "systemctl --user enable jdownloader-vigia.service >/dev/null 2>&1 || true"
+  # Rodando de um TTY, sem sessão gráfica, o restart falha; o enable basta e
+  # o vigia sobe no próximo login.
+  executar_sh "systemctl --user restart jdownloader-vigia.service 2>/dev/null || true"
+
+  # ----------------------------------------------------------------- ícone
+  # O logo não vai no repositório (é arte da AppWork): sai do próprio
+  # programa. O .jar recém-baixado só traz o de 64 px; os grandes chegam
+  # quando ele se atualiza pela primeira vez.
+  local icones="$HOME/.local/share/icons/hicolor"
+  local logos="$pasta/themes/standard/org/jdownloader/images/logo"
+  passo "ícone"
+  executar mkdir -p "$icones/64x64/apps"
+  executar_sh "python3 -c 'import sys, zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read(sys.argv[2]))' \
+    '$pasta/JDownloader.jar' themes/standard/org/jdownloader/images/updatericon.png \
+    > '$icones/64x64/apps/jdownloader.png'"
+  if [ -f "$logos/jd_logo_256_256.png" ]; then
+    # o nome diz 256, mas a imagem tem 512 px
+    executar install -Dm644 "$logos/logo-128x128.png"   "$icones/128x128/apps/jdownloader.png"
+    executar install -Dm644 "$logos/jd_logo_256_256.png" "$icones/512x512/apps/jdownloader.png"
+  else
+    anotar "JDownloader: depois de abri-lo uma vez, rode ./instalar.sh --so jdownloader de novo para o ícone em alta resolução"
+  fi
+  # Só renova um cache que já exista: criar um onde não havia faria o GTK
+  # deixar de enxergar ícones que outros apps põem ali depois.
+  if [ -f "$icones/icon-theme.cache" ]; then
+    executar_sh "gtk-update-icon-cache -q -f -t '$icones' 2>/dev/null || true"
+  fi
+
+  # ---------------------------------------------------------------- atalho
+  local atalho="$HOME/.local/share/applications/jdownloader.desktop"
+  passo "atalho no menu"
+  executar mkdir -p "$(dirname "$atalho")"
+  # escreve ao lado e troca de uma vez: o menu nunca lê um arquivo pela metade
+  executar_sh "sed 's|@BIN@|$HOME/.local/bin|' '$src/jdownloader.desktop' > '$atalho.tmp' && mv -f '$atalho.tmp' '$atalho'"
+  anotar "JDownloader: para trazer as contas e a lista de downloads, copie a pasta cfg de um backup para '$pasta/cfg' com ele fechado"
 }
 
 etapa_prefs() {
